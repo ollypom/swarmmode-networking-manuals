@@ -55,6 +55,23 @@ These nodes are running on Virtual Box with 1 NIC on a Host-Only network on the 
 
 ```
 [root@docker0 ~]# ifconfig
+docker0: flags=4099<UP,BROADCAST,MULTICAST>  mtu 1500
+        inet 172.17.0.1  netmask 255.255.0.0  broadcast 0.0.0.0
+        ether 02:42:ae:58:89:00  txqueuelen 0  (Ethernet)
+        RX packets 0  bytes 0 (0.0 B)
+        RX errors 0  dropped 0  overruns 0  frame 0
+        TX packets 0  bytes 0 (0.0 B)
+        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+
+docker_gwbridge: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
+        inet 172.18.0.1  netmask 255.255.0.0  broadcast 0.0.0.0
+        inet6 fe80::42:e3ff:fe97:caa4  prefixlen 64  scopeid 0x20<link>
+        ether 02:42:e3:97:ca:a4  txqueuelen 0  (Ethernet)
+        RX packets 14312  bytes 1532922 (1.4 MiB)
+        RX errors 0  dropped 0  overruns 0  frame 0
+        TX packets 14312  bytes 1532922 (1.4 MiB)
+        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+
 enp0s3: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
         inet 192.168.10.6  netmask 255.255.255.0  broadcast 192.168.10.255
         inet6 fe80::a00:27ff:fe35:8335  prefixlen 64  scopeid 0x20<link>
@@ -204,7 +221,7 @@ We can actually do the same thing within the Sandbox namespace of the container,
 [root@docker0 olly]# docker inspect 9e79d66b5112 -f {{.NetworkSettings.SandboxKey}}
 /var/run/docker/netns/06e0e24ce06d
 
-[root@docker0 olly]# nsenter --net=$C0netns ifconfig
+[root@docker0 olly]# nsenter --net=/var/run/docker/netns/06e0e24ce06d ifconfig
 eth0: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1450
         inet 192.168.200.3  netmask 255.255.255.0  broadcast 0.0.0.0
         inet6 fe80::42:c0ff:fea8:c803  prefixlen 64  scopeid 0x20<link>
@@ -255,10 +272,13 @@ From the ifconfig out put we can see that the container has 2 interfaces. Eth0 a
 
 I think its time to start drawing diagrams to work out how that is connected to the outside world.
 
+From the first diagram we can see that we have 4 namespaces, and the default docker_gwbridge, and my container in sandbox.
 
+**Image 1**
 
-We can see the veth IDs to see what they are connected too..
+Let start working out how we are communicating between the namespaces. This is done using VETH Pairs. So firstly lets see what VETH pairs are within the container's namespace.
 
+```
 [root@docker0 ~]# nsenter --net=/var/run/docker/netns/06e0e24ce06d ip link show
 1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN mode DEFAULT qlen 1
     link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
@@ -266,16 +286,13 @@ We can see the veth IDs to see what they are connected too..
     link/ether 02:42:c0:a8:c8:03 brd ff:ff:ff:ff:ff:ff link-netnsid 0
 20: eth1@if21: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP mode DEFAULT
     link/ether 02:42:ac:12:00:03 brd ff:ff:ff:ff:ff:ff link-netnsid 1
+```
 
-[root@docker0 olly]# nsenter --net=$C0netns  ethtool -S eth0
-NIC statistics:
-     peer_ifindex: 19
-[root@docker0 olly]# nsenter --net=$C0netns  ethtool -S eth1
-NIC statistics:
-     peer_ifindex: 21
+Ok so: eth0 = interface 18 and is connected to interface 19. eth1 = interface 20 and is connected to interface 21.
 
-So eth0 is in the Namespace of the Demonet Overlay network:
+So lets go and make sure that interface 19 lives inside of the demonet overlay namespace. 
 
+```
 [root@docker0 ~]# nsenter --net=/var/run/docker/netns/1-jv8c30bcmn ip link show
 1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN mode DEFAULT qlen 1
     link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
@@ -285,9 +302,13 @@ So eth0 is in the Namespace of the Demonet Overlay network:
     link/ether f6:1c:e9:9a:60:bd brd ff:ff:ff:ff:ff:ff link-netnsid 0
 19: veth2@if18: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1450 qdisc noqueue master br0 state UP mode DEFAULT
     link/ether 1a:34:cf:83:2c:11 brd ff:ff:ff:ff:ff:ff link-netnsid 1
+```
 
-And eth1 is in the Global Namespace 
+Perfect. There is interface 19.
 
+Now lets go and see if interface 21 is in the global namespace connected to the Docker_GWBridge. 
+
+```
 [root@docker0 ~]# ip link show
 1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN mode DEFAULT qlen 1
     link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
@@ -303,6 +324,128 @@ And eth1 is in the Global Namespace
     link/ether ee:a6:c3:12:df:41 brd ff:ff:ff:ff:ff:ff link-netnsid 1
 21: veth90d0481@if20: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue master docker_gwbridge state UP mode DEFAULT
     link/ether fe:02:c8:af:60:f5 brd ff:ff:ff:ff:ff:ff link-netnsid 4
+```
+
+Perfect there is interface 21. So we can now update our diagram accordingly. 
+
+** Image 2 **
+
+Just for completeness here I lets see how the container knows where to send the traffic.
+
+```
+[root@docker0 olly]# docker exec 3e53de6af276 ip route show
+default via 172.18.0.1 dev eth1
+172.18.0.0/16 dev eth1  src 172.18.0.3
+192.168.200.0/24 dev eth0  src 192.168.200.4
+```
+
+Ok nice so there are some static routes in play. The default option is to send the traffic out of the eth1 to the internet. However if we are talking on the demonet subnet of 192.168.200.0/24 then go down eth0. 
+
+We can even monitor the veths in the sandbox namespace, to prove this is working correctly. Here I am going to open up terminal sessions.
+
+Terminal1:
+```
+[root@docker0 ~]# docker exec 3e53de6af276 apk add --update tcpdump
+[root@docker0 ~]# docker exec 3e53de6af276 tcpdump -i eth0 -vv
+```
+
+Terminal2:
+```
+[olly@docker0 ~]$ docker exec 3e53de6af276 ping 192.168.200.1 -c 4
+PING 192.168.200.1 (192.168.200.1): 56 data bytes
+64 bytes from 192.168.200.1: seq=0 ttl=64 time=0.139 ms
+64 bytes from 192.168.200.1: seq=1 ttl=64 time=0.144 ms
+64 bytes from 192.168.200.1: seq=2 ttl=64 time=0.110 ms
+64 bytes from 192.168.200.1: seq=3 ttl=64 time=0.110 ms
+
+--- 192.168.200.1 ping statistics ---
+4 packets transmitted, 4 packets received, 0% packet loss
+round-trip min/avg/max = 0.110/0.125/0.144 ms
+```
+
+Terminal1:
+```
+[root@docker0 ~]# docker exec 3e53de6af276 tcpdump -i eth0 -vv
+tcpdump: listening on eth0, link-type EN10MB (Ethernet), capture size 262144 bytes
+15:50:24.396714 IP (tos 0x0, ttl 64, id 19031, offset 0, flags [DF], proto ICMP (1), length 84)
+    3e53de6af276 > 192.168.200.1: ICMP echo request, id 18176, seq 0, length 64
+15:50:24.396783 IP (tos 0x0, ttl 64, id 55889, offset 0, flags [none], proto ICMP (1), length 84)
+    192.168.200.1 > 3e53de6af276: ICMP echo reply, id 18176, seq 0, length 64
+15:50:25.399797 IP (tos 0x0, ttl 64, id 19915, offset 0, flags [DF], proto ICMP (1), length 84)
+    3e53de6af276 > 192.168.200.1: ICMP echo request, id 18176, seq 1, length 64
+15:50:25.399847 IP (tos 0x0, ttl 64, id 56855, offset 0, flags [none], proto ICMP (1), length 84)
+    192.168.200.1 > 3e53de6af276: ICMP echo reply, id 18176, seq 1, length 64
+15:50:26.404153 IP (tos 0x0, ttl 64, id 20855, offset 0, flags [DF], proto ICMP (1), length 84)
+    3e53de6af276 > 192.168.200.1: ICMP echo request, id 18176, seq 2, length 64
+15:50:26.404188 IP (tos 0x0, ttl 64, id 57649, offset 0, flags [none], proto ICMP (1), length 84)
+    192.168.200.1 > 3e53de6af276: ICMP echo reply, id 18176, seq 2, length 64
+15:50:27.409870 IP (tos 0x0, ttl 64, id 21257, offset 0, flags [DF^C
+```
+
+Ok awesome so if I am sending a request to the gateway or a container on that DemoNet overlay network, it is going to the Demonet overlay namespace. Awesome :)
+
+We can double check to make sure traffic is going to the global namespace when it needs to go outside. 
+
+Terminal1
+```
+[root@docker0 ~]# docker exec 3e53de6af276 tcpdump -i eth1 -vv
+```
+
+Terminal2
+```
+[olly@docker0 ~]$ docker exec 3e53de6af276 ping 8.8.8.8 -c 4
+PING 8.8.8.8 (8.8.8.8): 56 data bytes
+64 bytes from 8.8.8.8: seq=0 ttl=61 time=6.976 ms
+64 bytes from 8.8.8.8: seq=1 ttl=61 time=5.929 ms
+64 bytes from 8.8.8.8: seq=2 ttl=61 time=5.770 ms
+64 bytes from 8.8.8.8: seq=3 ttl=61 time=5.287 ms
+
+--- 8.8.8.8 ping statistics ---
+4 packets transmitted, 4 packets received, 0% packet loss
+round-trip min/avg/max = 5.287/5.990/6.976 ms
+```
+
+Terminal1
+```
+[root@docker0 ~]# docker exec 3e53de6af276 tcpdump -i eth1 -vv
+tcpdump: listening on eth1, link-type EN10MB (Ethernet), capture size 262144 bytes
+15:53:17.623446 IP (tos 0x0, ttl 64, id 8514, offset 0, flags [DF], proto ICMP (1), length 84)
+    172.18.0.3 > google-public-dns-a.google.com: ICMP echo request, id 20224, seq 0, length 64
+15:53:17.629460 IP (tos 0x0, ttl 61, id 31464, offset 0, flags [DF], proto ICMP (1), length 84)
+    google-public-dns-a.google.com > 172.18.0.3: ICMP echo reply, id 20224, seq 0, length 64
+15:53:18.040380 IP (tos 0x0, ttl 64, id 47549, offset 0, flags [DF], proto UDP (17), length 66)
+    172.18.0.3.36804 > max-az-2k12-dc1.internal.maximus-it.com.53: [bad udp cksum 0x5869 -> 0x2fd9!] 52840+ PTR? 8.8.8.8.in-addr.arpa. (38)
+15:53:18.056098 IP (tos 0x0, ttl 63, id 31465, offset 0, flags [none], proto UDP (17), length 110)
+    max-az-2k12-dc1.internal.maximus-it.com.53 > 172.18.0.3.36804: [udp sum ok] 52840 q: PTR? 8.8.8.8.in-addr.arpa. 1/0/0 8.8.8.8.in-addr.arpa. PTR google-public-dns-a.google.com. (82)
+15:53:18.057096 IP (tos 0x0, ttl 64, id 47552, offset 0, flags [DF], proto UDP (17), length 69)
+    172.18.0.3.45495 > max-az-2k12-dc1.internal.maximus-it.com.53: [bad udp cksum 0x586c -> 0x3d0b!] 52103+ PTR? 3.0.18.172.in-addr.arpa. (41)
+15:53:18.086138 IP (tos 0x0, ttl 63, id 31466, offset 0, flags [none], proto UDP (17), length 69)
+    max-az-2k12-dc1.internal.maximus-it.com.53 > 172.18.0.3.45495: [udp sum ok] 52103 NXDomain q: PTR? 3.0.18.172.in-addr.arpa. 0/0/0 (41)
+15:53:18.625708 IP (tos 0x0, ttl 64, id 8617, offset 0, flags [DF], proto ICMP (1), length 84)
+    172.18.0.3 > google-public-dns-a.google.com: ICMP echo request, id 20224, seq 1, length 64
+15:53:18.631365 IP (tos 0x0, ttl 61, id 31467, offset 0, flags [DF], proto ICMP (1), length 84)
+    google-public-dns-a.google.com > 172.18.0.3: ICMP echo reply, id 20224, seq 1, length 64
+15:53:19.042464 IP (tos 0x0, ttl 64, id 48393, offset 0, flags [DF], proto UDP (17), length 69)
+    172.18.0.3.33958 > max-az-2k12-dc1.internal.maximus-it.com.53: [bad udp cksum 0x586c -> 0x3348!] 1115+ PTR? 4.0.16.172.in-addr.arpa. (41)
+15:53:19.060691 IP (tos 0x0, ttl 63, id 31468, offset 0, flags [none], proto UDP (17), length 122)
+    max-az-2k12-dc1.internal.maximus-it.com.53 > 172.18.0.3.33958: [udp sum ok] 1115* q: PTR? 4.0.16.172.in-addr.arpa. 1/0/0 4.0.16.172.in-addr.arpa. PTR max-az-2k12-dc1.internal.maximus-it.com. (94)
+15:53:19.629414 IP (tos 0x0, ttl 64, id 9188, offset 0, flags [DF], proto ICMP (1), length 84)
+    172.18.0.3 > google-public-dns-a.google.com: ICMP echo request, id 20224, seq 2, length 64
+15:53:19.634906 IP (tos 0x0, ttl 61, id 31469, offset 0, flags [DF], proto ICMP (1), length 84)
+    google-public-dns-a.google.com > 172.18.0.3: ICMP echo reply, id 20224, seq 2, length 64
+15:53:20.629957 IP (tos 0x0, ttl 64, id 9281, offset 0, flags [DF], proto ICMP (1), length 84)
+    172.18.0.3 > google-public-dns-a.google.com: ICMP echo request, id 20224, seq 3, length 64
+15:53:20.635036 IP (tos 0x0, ttl 61, id 31470, offset 0, flags [DF], proto ICMP (1), length 84)
+    google-public-dns-a.google.com > 172.18.0.3: ICMP echo reply, id 20224, seq 3, length 64
+15:53:22.629378 ARP, Ethernet (len 6), IPv4 (len 4), Request who-has 172.18.0.1 tell 172.18.0.3, length 28
+```
+
+Awesome. Happy days. This shows the isolation for docker container overlay networking. If required you can actually run containers which don't have a leg in the global namespace at all. Completely isolated. 
+
+TODO - Show how the ingress network is connected. And however Ingress Overlay networking works for multiple hosts.
+
+
+
 [root@docker0 ~]# nsenter --net=/var/run/docker/netns/1-jv8c30bcmn ip -d link show
 1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN mode DEFAULT qlen 1
     link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00 promiscuity 0 addrgenmode eui64
