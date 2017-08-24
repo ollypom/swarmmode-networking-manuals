@@ -444,8 +444,7 @@ Awesome. Happy days. This shows the isolation for docker container overlay netwo
 
 TODO - Show how the ingress network is connected. And however Ingress Overlay networking works for multiple hosts.
 
-
-
+```
 [root@docker0 ~]# nsenter --net=/var/run/docker/netns/1-jv8c30bcmn ip -d link show
 1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN mode DEFAULT qlen 1
     link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00 promiscuity 0 addrgenmode eui64
@@ -460,4 +459,4 @@ TODO - Show how the ingress network is connected. And however Ingress Overlay ne
     link/ether 1a:34:cf:83:2c:11 brd ff:ff:ff:ff:ff:ff link-netnsid 1 promiscuity 1
     veth
     bridge_slave addrgenmode eui64
-
+```
