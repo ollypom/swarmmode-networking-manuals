@@ -4,10 +4,6 @@ Based on these blogs for swarm classic:
 
 http://techblog.d2-si.eu/2017/04/25/deep-dive-into-docker-overlay-networks-part-1.html
 
-http://techblog.d2-si.eu/2017/04/25/deep-dive-into-docker-overlay-networks-part-2.html
-
-http://techblog.d2-si.eu/2017/04/25/deep-dive-into-docker-overlay-networks-part-3.html
-
 It felt like right to make one for Swarm Mode :)
 
 TODO - Missed the early steps where I evaluated the Ingress Overlay Network and the Ingress Sandbox Namespace.
@@ -90,9 +86,21 @@ lo: flags=73<UP,LOOPBACK,RUNNING>  mtu 65536
 I have then created a Docker Swarm using the in build Docker Swarm Mode (Swarmkit).
 
 ```
+[olly@docker0 ~]$ docker swarm init --advertise-addr enp0s3
 
+[olly@docker1 ~]$ docker swarm join --advertise-addr enp0s3  \
+    --token SWMTKN-1-4bgrvcqunq6oye74v3cjve2jbyn1t9u7mnaek3rw2clbl5van0-14dgns2w0phm1koy5yom2tzgf \
+    192.168.10.6:2377
 
+[olly@docker0 ~]$ docker node ls
+ID                           HOSTNAME       STATUS  AVAILABILITY  MANAGER STATUS
+t0k5yhm8g0wft11397n4caz9j *  docker0.local  Ready   Active        Leader
+td0ifcvhzy7cexgiixiisnl3b    docker1.local  Ready   Active
+``` 
 
+Perfect. Now lets create an overlay network and a service so we can actually start to poke around the various namespaces within SwarmKit.
+
+```
 $ docker network create -d overlay --subnet 192.168.200.0/24 demonet
 $ docker service create --replicas 2 --network demonet --name demoservice alpine sleep 10000
 
@@ -101,14 +109,13 @@ ID            NAME               IMAGE          NODE           DESIRED STATE  CU
 zazcrztrp8no  demoservice.1      alpine:latest  docker0.local  Running        Running 8 minutes ago
 lbg6y0b0y3zh   \_ demoservice.1  alpine:latest  docker0.local  Shutdown       Failed 8 minutes ago   "starting container failed: Ad…"
 qfbik6vam8q6  demoservice.2      alpine:latest  docker1.local  Running        Running 8 minutes ago
+```
 
-We should have a container running on each of my hosts. Checking the networks you can see I have my overlay network, and now 4 network namespaces. 
+As you can see we now have a container running on each of my hosts. 
 
-1. An Alpine Container
-2. Ingress Overlay
-3. Demonet Overlay 
-4. Ingress Sandbox
+Checking the networks you can see I have my overlay network, and now 4 network namespaces. 
 
+```
 [olly@docker0 ~]$ docker network ls
 NETWORK ID          NAME                DRIVER              SCOPE
 1586a330769e        bridge              bridge              local
@@ -124,7 +131,31 @@ total 0
 -r--r--r--. 1 root root 0 Aug 23 09:22 1-jk79gn3pi7
 -r--r--r--. 1 root root 0 Aug 23 11:11 1-jv8c30bcmn
 -r--r--r--. 1 root root 0 Aug 23 09:22 ingress_sbox
+```
 
+So these are the following.
+
+1. The Alpine Containers Sandbox Namespace. This can be proven by running the inspect command.
+
+```
+[olly@docker0 ~]$ docker inspect 43f05d7a2438 | grep Sandbox
+            "SandboxID": "f30f9eab7ed4e2e637806da7e006b743ac2b9bf8aac2a0ff2843eb02ef7c94a9",
+            "SandboxKey": "/var/run/docker/netns/f30f9eab7ed4",
+```
+
+2. Ingress Overlay. You can see this as the name '1-jk79gn3pi7' matches the ID of the Ingress Overlay Network
+
+```
+[olly@docker0 ~]$ docker network ls --filter name=ingress
+NETWORK ID          NAME                DRIVER              SCOPE
+jk79gn3pi7ge        ingress             overlay             swarm
+```
+
+3. Demonet Overlay 
+
+
+
+4. Ingress Sandbox
 Connecting to the Container Network Namespace
 
 [root@docker0 olly]# docker ps
