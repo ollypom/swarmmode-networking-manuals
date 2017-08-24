@@ -274,7 +274,7 @@ I think its time to start drawing diagrams to work out how that is connected to 
 
 From the first diagram we can see that we have 4 namespaces, and the default docker_gwbridge, and my container in sandbox.
 
-**Image 1**
+![alt text](../master/images/image1.png "Image 1")
 
 Let start working out how we are communicating between the namespaces. This is done using VETH Pairs. So firstly lets see what VETH pairs are within the container's namespace.
 
@@ -328,7 +328,7 @@ Now lets go and see if interface 21 is in the global namespace connected to the 
 
 Perfect there is interface 21. So we can now update our diagram accordingly. 
 
-** Image 2 **
+![alt text](../master/images/image2.png "Image 2")
 
 Just for completeness here I lets see how the container knows where to send the traffic.
 
