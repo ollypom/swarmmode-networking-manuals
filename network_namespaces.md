@@ -8,7 +8,7 @@ It felt like right to make one for Swarm Mode :)
 
 TODO - Missed the early steps where I evaluated the Ingress Overlay Network and the Ingress Sandbox Namespace.
 
-## Set up a cluster to explore 
+### Set up a cluster to explore 
 
 I have just created a 2 node cluster. 1 Manager and 1 Worker. They are running on the latest version of centos 7 and are running the Docker EE 1706 Engine. These nodes are called Docker0.local nad Docker1.local.
 
@@ -98,7 +98,11 @@ t0k5yhm8g0wft11397n4caz9j *  docker0.local  Ready   Active        Leader
 td0ifcvhzy7cexgiixiisnl3b    docker1.local  Ready   Active
 ``` 
 
-Perfect. Now lets create an overlay network and a service so we can actually start to poke around the various namespaces within SwarmKit.
+Perfect.
+
+### Exploring the Namespaces
+
+ Now lets create an overlay network and a service so we can actually start to poke around the various namespaces within SwarmKit.
 
 ```
 $ docker network create -d overlay --subnet 192.168.200.0/24 demonet
@@ -133,7 +137,7 @@ total 0
 -r--r--r--. 1 root root 0 Aug 23 09:22 ingress_sbox
 ```
 
-So these are the following.
+So what are these namespaces defined within /var/run/docker/netns ?
 
 1. The Alpine Containers Sandbox Namespace. This can be proven by running the inspect command.
 
@@ -151,17 +155,52 @@ NETWORK ID          NAME                DRIVER              SCOPE
 jk79gn3pi7ge        ingress             overlay             swarm
 ```
 
-3. Demonet Overlay 
+3. Demonet Overlay. Following the same logic as the ingress overlay network. The Demonet network is contained within its own namespace.
 
+4. Finally we have an Ingress Sandbox. TODO Work out what this does?
 
+### How does my container talk to stuff?
 
-4. Ingress Sandbox
-Connecting to the Container Network Namespace
+As part of the Alpine service we created above, we should now have an alpine container sat there sleeping on my host. I have specified that it should be connected to my "Demonet" network. Lets see what it looks like.
 
-[root@docker0 olly]# docker ps
+```
+[olly@docker0 ~]# docker ps
 CONTAINER ID        IMAGE                                                                            COMMAND             CREATED             STATUS              PORTS               NAMES
 9e79d66b5112        alpine@sha256:1072e499f3f655a032e88542330cf75b02e7bdf673278f701d7ba61629ee3ebe   "sleep 10000"       15 minutes ago      Up 14 minutes                           demoservice.1.zazcrztrp8noilfyignita3tf
 
+
+[olly@docker0 ~]$ docker exec 9e79d66b5112 ifconfig
+eth0      Link encap:Ethernet  HWaddr 02:42:c0:a8:c8:03
+          inet addr:192.168.200.3  Bcast:0.0.0.0  Mask:255.255.255.0
+          inet6 addr: fe80::42:c0ff:fea8:c803/64 Scope:Link
+          UP BROADCAST RUNNING MULTICAST  MTU:1450  Metric:1
+          RX packets:41 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:8 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:0
+          RX bytes:3254 (3.1 KiB)  TX bytes:648 (648.0 B)
+
+eth1      Link encap:Ethernet  HWaddr 02:42:ac:12:00:03
+          inet addr:172.18.0.3  Bcast:0.0.0.0  Mask:255.255.0.0
+          inet6 addr: fe80::42:acff:fe12:3/64 Scope:Link
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:42 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:8 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:0
+          RX bytes:3304 (3.2 KiB)  TX bytes:648 (648.0 B)
+
+lo        Link encap:Local Loopback
+          inet addr:127.0.0.1  Mask:255.0.0.0
+          inet6 addr: ::1/128 Scope:Host
+          UP LOOPBACK RUNNING  MTU:65536  Metric:1
+          RX packets:0 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:0 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1
+          RX bytes:0 (0.0 B)  TX bytes:0 (0.0 B)
+```
+
+We can actually do the same thing within the Sandbox namespace of the container, using the nsenter command. 
+
+```
 [root@docker0 olly]# docker inspect 9e79d66b5112 -f {{.NetworkSettings.SandboxKey}}
 /var/run/docker/netns/06e0e24ce06d
 
@@ -192,8 +231,31 @@ lo: flags=73<UP,LOOPBACK,RUNNING>  mtu 65536
         RX errors 0  dropped 0  overruns 0  frame 0
         TX packets 0  bytes 0 (0.0 B)
         TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+```
 
-So we can see that it has VETHs in 2 namespaces. The Demonet Overlay and the Ingress Overlay. 
+From the ifconfig out put we can see that the container has 2 interfaces. Eth0 and Eth1. Looking at the IP address we can see the container has 1 leg in the Demonet Overlay network. And 1 leg connected to the Docker_GWBridge which lives in the global namespace.
+
+```
+[olly@docker0 ~]$ docker network inspect demonet -f '{{json .IPAM.Config}}' | jq '.'
+[
+  {
+    "Subnet": "192.168.200.0/24",
+    "Gateway": "192.168.200.1"
+  }
+]
+
+[olly@docker0 ~]$ docker network inspect docker_gwbridge -f '{{json .IPAM.Config}}' | jq '.'
+[
+  {
+    "Subnet": "172.18.0.0/16",
+    "Gateway": "172.18.0.1"
+  }
+]
+```
+
+I think its time to start drawing diagrams to work out how that is connected to the outside world.
+
+
 
 We can see the veth IDs to see what they are connected too..
 
