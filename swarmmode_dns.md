@@ -203,6 +203,6 @@ Ahhh perfect we can now see that with in the container sandbox namespace we can 
 
 All of this can be nicely shown in this slide:
 
-**slide1**
+![alt text](../master/images/dnsslide.png "DNS Slide")
 
 I will do more work on how Daemon updates the records within the DNS server within the Service Discovery section.
