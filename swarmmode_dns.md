@@ -140,17 +140,44 @@ Chain DOCKER_POSTROUTING (1 references)
     0     0 SNAT       udp  --  *      *       127.0.0.11           0.0.0.0/0            udp spt:58175 to::53
 ```
 
+Interesting. Ok we can see that Docker have added a few rules in this table.
 
-So we can see that there is an IPTables rule to move traffic heading to :53 to either a 39923 or a 58175 port on localhost depending on whether this is UDP or TCP. If you run a net stat for open ports, you can see in fact this forwards to the PID of  the docker daemon.
+Looking at the Docker_OUTPUT chain we can see that we now have NAT rules for both tcp and UDP DNS traffic. They are being fowarded to:
 
+```
+tcp dpt:53 to:127.0.0.11:39923
+udp dpt:53 to:127.0.0.11:58175
+```
+
+And interestingly there is a trap set up in the POSTROUTING, to NAT everything back to the 53 port. 
+
+```
+tcp spt:39923 to::53
+udp spt:58175 to::53
+```
+
+Now lets see who is listening on this new ports. And what process that belongs too.
+
+```
 [root@docker0 ~]# nsenter --net=/var/run/docker/netns/4ba56594526d netstat -c -tunlp
 Active Internet connections (only servers)
 Proto Recv-Q Send-Q Local Address           Foreign Address         State       PID/Program name
 tcp        0      0 127.0.0.11:39923        0.0.0.0:*               LISTEN      988/dockerd
 udp        0      0 127.0.0.11:58175        0.0.0.0:*                           988/dockerd
+```
 
-And yep, you can do service discovery against these ports. 
+Aaahh there we go. The Docker Daemon (running in the 988 PID) is listening to ports in this namespace. And of course you can see its the 2 ports that we are doing NAT translatoin too.
 
+```
+[olly@docker0 ~]$ ps aux | grep dockerd
+root       988  0.5  2.9 752536 55736 ?        Ssl  11:48   0:10 /usr/bin/dockerd
+olly      3092  0.0  0.0 112648   968 pts/0    S+   12:21   0:00 grep --color=auto dockerd
+```
+
+
+To test this i'm going to do native lookup against these interfaces. 
+
+```
 [olly@docker0 ~]$ docker exec 2036107e55ce dig @127.0.0.11 -p 58175 demoservice.demonet
 
 ; <<>> DiG 9.11.1-P1 <<>> @127.0.0.11 -p 58175 demoservice.demonet
@@ -170,6 +197,12 @@ demoservice.demonet.	600	IN	A	192.168.200.2
 ;; SERVER: 127.0.0.11#58175(127.0.0.11)
 ;; WHEN: Wed Aug 23 14:35:08 UTC 2017
 ;; MSG SIZE  rcvd: 72
+```
 
+Ahhh perfect we can now see that with in the container sandbox namespace we can see that the DNS server is embedded within the Docker Daemon, and we can see how Docker gets containers to use this service. 
 
+All of this can be nicely shown in this slide:
 
+**slide1**
+
+I will do more work on how Daemon updates the records within the DNS server within the Service Discovery section.
