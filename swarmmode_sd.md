@@ -107,7 +107,7 @@ Awesome you can now see that I have 5 entries within my LVS table. Happy Days.
 
 If i add a new service in to my cluster. Watch how it also now getting entries within the IPVS table
 
-Are you sure that IP Virtual Server is built in the kernel or as module?
+```
 [olly@docker0 ~]$ docker service create --replicas 2 --network demonet --name demoservice2 alpine sleep 10000
 e6lx2ib10eoutri6kh10clnsq
 
@@ -139,6 +139,7 @@ FWM  256 rr
 FWM  258 rr
   -> docker0.local:0              Masq    1      0          0
   -> 192.168.200.4:0              Masq    1      0          0
+```
 
 Awesome we can see that the Mangle tables have been updated and that a new rr entry has been set up in the load balancer.
 
