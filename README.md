@@ -4,7 +4,7 @@ When looking online I felt there was good update to information on Docker Swarm 
 
 [1) Containers, Overlay Networks and Network Namespaces](../master/containers_overlaynnetworks.md)
 
-2) Overlay Networks, Multiple hosts and Network Namespaces
+[2) Overlay Networks, Multiple hosts and Network Namespaces](../master/ingressnetworks.md)
 
 [3) SwarmMode DNS Service](../master/swarmmode_dns.md)
 
