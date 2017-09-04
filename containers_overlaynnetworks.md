@@ -1,39 +1,30 @@
-# Network Namespaces and Beyond
-
-Based on these blogs for swarm classic:
-
-http://techblog.d2-si.eu/2017/04/25/deep-dive-into-docker-overlay-networks-part-1.html
-
-It felt like right to make one for Swarm Mode :)
-
-TODO - Missed the early steps where I evaluated the Ingress Overlay Network and the Ingress Sandbox Namespace.
-
 ### Set up a cluster to explore 
 
-I have just created a 2 node cluster. 1 Manager and 1 Worker. They are running on the latest version of centos 7 and are running the Docker EE 1706 Engine. These nodes are called Docker0.local nad Docker1.local.
+This is going to be a very simple environment, to demonstrate the Swarm Mode networking functionality. Therefore to start, I have created a 2 Node Cluster. 1 Manager and 1 Worker. They are running on the latest version of centos 7 and are running the Docker EE 1706 Engine. These nodes are called Docker0.local nad Docker1.local.
 
 ```
-[root@docker0 ~]# docker version
+[olly@docker0 ~]$ docker version
 Client:
- Version:      17.03.2-ee-5
+ Version:      17.03.2-ee-6
  API version:  1.27
  Go version:   go1.7.5
- Git commit:   fa09039
- Built:        Thu Jul 20 00:18:48 2017
+ Git commit:   bdc2646
+ Built:        Wed Aug 23 23:08:28 2017
  OS/Arch:      linux/amd64
 
 Server:
- Version:      17.03.2-ee-5
+ Version:      17.03.2-ee-6
  API version:  1.27 (minimum version 1.12)
  Go version:   go1.7.5
- Git commit:   fa09039
- Built:        Thu Jul 20 00:18:48 2017
+ Git commit:   bdc2646
+ Built:        Wed Aug 23 23:08:28 2017
  OS/Arch:      linux/amd64
  Experimental: false
 
-[root@docker0 ~]# uname -r
+[olly@docker0 ~]$ uname -r
 3.10.0-514.26.2.el7.x86_64
-[root@docker0 ~]# cat /etc/os-release
+
+[olly@docker0 ~]$ cat /etc/os-release 
 NAME="CentOS Linux"
 VERSION="7 (Core)"
 ID="centos"
@@ -51,13 +42,15 @@ REDHAT_SUPPORT_PRODUCT="centos"
 REDHAT_SUPPORT_PRODUCT_VERSION="7"
 ```
 
-These nodes are running on Virtual Box with 1 NIC on a Host-Only network on the 192.168.10.x/24 subnet. And 1 NIC nated to the host with a 10.x.x.x address.
+My environment is running locally on virtual box. Therefore has 2 subnets, a host only network to allow for node to node communication. And a NAT interface allowing these nodes to reach the internet throw my laptops interfaces. 
+
+enp0s3 is my primary interface, on the host only network, on the subnet 192.168.100.x/24subnet.
 
 ```
-[root@docker0 ~]# ifconfig
+[olly@docker0 ~]$ ifconfig
 docker0: flags=4099<UP,BROADCAST,MULTICAST>  mtu 1500
         inet 172.17.0.1  netmask 255.255.0.0  broadcast 0.0.0.0
-        ether 02:42:ae:58:89:00  txqueuelen 0  (Ethernet)
+        ether 02:42:48:ad:77:27  txqueuelen 0  (Ethernet)
         RX packets 0  bytes 0 (0.0 B)
         RX errors 0  dropped 0  overruns 0  frame 0
         TX packets 0  bytes 0 (0.0 B)
@@ -65,38 +58,46 @@ docker0: flags=4099<UP,BROADCAST,MULTICAST>  mtu 1500
 
 docker_gwbridge: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
         inet 172.18.0.1  netmask 255.255.0.0  broadcast 0.0.0.0
-        inet6 fe80::42:e3ff:fe97:caa4  prefixlen 64  scopeid 0x20<link>
-        ether 02:42:e3:97:ca:a4  txqueuelen 0  (Ethernet)
-        RX packets 14312  bytes 1532922 (1.4 MiB)
+        inet6 fe80::42:f3ff:fe02:ea8d  prefixlen 64  scopeid 0x20<link>
+        ether 02:42:f3:02:ea:8d  txqueuelen 0  (Ethernet)
+        RX packets 7433  bytes 724856 (707.8 KiB)
         RX errors 0  dropped 0  overruns 0  frame 0
-        TX packets 14312  bytes 1532922 (1.4 MiB)
+        TX packets 7433  bytes 724856 (707.8 KiB)
         TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
 
 enp0s3: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
-        inet 192.168.10.6  netmask 255.255.255.0  broadcast 192.168.10.255
-        inet6 fe80::a00:27ff:fe35:8335  prefixlen 64  scopeid 0x20<link>
-        ether 08:00:27:35:83:35  txqueuelen 1000  (Ethernet)
-        RX packets 41148  bytes 5107966 (4.8 MiB)
+        inet 192.168.100.151  netmask 255.255.255.0  broadcast 192.168.100.255
+        inet6 fe80::ed6f:9571:a0dc:3277  prefixlen 64  scopeid 0x20<link>
+        ether 08:00:27:b5:e5:8f  txqueuelen 1000  (Ethernet)
+        RX packets 5817  bytes 559514 (546.4 KiB)
         RX errors 0  dropped 0  overruns 0  frame 0
-        TX packets 37493  bytes 8483555 (8.0 MiB)
+        TX packets 3799  bytes 474571 (463.4 KiB)
         TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
 
 enp0s8: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
         inet 10.0.3.15  netmask 255.255.255.0  broadcast 10.0.3.255
-        inet6 fe80::3dcd:f55f:9714:e624  prefixlen 64  scopeid 0x20<link>
-        ether 08:00:27:b3:03:4a  txqueuelen 1000  (Ethernet)
-        RX packets 82314  bytes 107956881 (102.9 MiB)
+        inet6 fe80::3959:f5b6:530b:5bb5  prefixlen 64  scopeid 0x20<link>
+        ether 08:00:27:1b:6e:39  txqueuelen 1000  (Ethernet)
+        RX packets 170  bytes 16202 (15.8 KiB)
         RX errors 0  dropped 0  overruns 0  frame 0
-        TX packets 38830  bytes 2368524 (2.2 MiB)
+        TX packets 179  bytes 15155 (14.7 KiB)
         TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
 
 lo: flags=73<UP,LOOPBACK,RUNNING>  mtu 65536
         inet 127.0.0.1  netmask 255.0.0.0
         inet6 ::1  prefixlen 128  scopeid 0x10<host>
         loop  txqueuelen 1  (Local Loopback)
-        RX packets 12222  bytes 1320282 (1.2 MiB)
+        RX packets 7433  bytes 724856 (707.8 KiB)
         RX errors 0  dropped 0  overruns 0  frame 0
-        TX packets 12222  bytes 1320282 (1.2 MiB)
+        TX packets 7433  bytes 724856 (707.8 KiB)
+        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+
+vethe461b48: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
+        inet6 fe80::dc4e:59ff:fe71:9e65  prefixlen 64  scopeid 0x20<link>
+        ether de:4e:59:71:9e:65  txqueuelen 0  (Ethernet)
+        RX packets 8  bytes 648 (648.0 B)
+        RX errors 0  dropped 0  overruns 0  frame 0
+        TX packets 8  bytes 648 (648.0 B)
         TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
 ```
 
