@@ -42,73 +42,37 @@ REDHAT_SUPPORT_PRODUCT="centos"
 REDHAT_SUPPORT_PRODUCT_VERSION="7"
 ```
 
-My environment is running locally on virtual box. Therefore has 2 subnets, a host only network to allow for node to node communication. And a NAT interface allowing these nodes to reach the internet throw my laptops interfaces. 
+My environment is running locally on QEMU / KVM on my laptop. Therefore we have 1 interface per node attached to a local bridge, to allow for node to node communication, and to reach the wide world. 
 
-enp0s3 is my primary interface, on the host only network, on the subnet 192.168.100.x/24subnet.
+ens3 is my primary interface and it is on the 192.168.122.0/24 subnet.
+
 
 ```
-[olly@docker0 ~]$ ifconfig
-docker0: flags=4099<UP,BROADCAST,MULTICAST>  mtu 1500
-        inet 172.17.0.1  netmask 255.255.0.0  broadcast 0.0.0.0
-        ether 02:42:48:ad:77:27  txqueuelen 0  (Ethernet)
-        RX packets 0  bytes 0 (0.0 B)
-        RX errors 0  dropped 0  overruns 0  frame 0
-        TX packets 0  bytes 0 (0.0 B)
-        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
-
-docker_gwbridge: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
-        inet 172.18.0.1  netmask 255.255.0.0  broadcast 0.0.0.0
-        inet6 fe80::42:f3ff:fe02:ea8d  prefixlen 64  scopeid 0x20<link>
-        ether 02:42:f3:02:ea:8d  txqueuelen 0  (Ethernet)
-        RX packets 7433  bytes 724856 (707.8 KiB)
-        RX errors 0  dropped 0  overruns 0  frame 0
-        TX packets 7433  bytes 724856 (707.8 KiB)
-        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
-
-enp0s3: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
-        inet 192.168.100.151  netmask 255.255.255.0  broadcast 192.168.100.255
-        inet6 fe80::ed6f:9571:a0dc:3277  prefixlen 64  scopeid 0x20<link>
-        ether 08:00:27:b5:e5:8f  txqueuelen 1000  (Ethernet)
-        RX packets 5817  bytes 559514 (546.4 KiB)
-        RX errors 0  dropped 0  overruns 0  frame 0
-        TX packets 3799  bytes 474571 (463.4 KiB)
-        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
-
-enp0s8: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
-        inet 10.0.3.15  netmask 255.255.255.0  broadcast 10.0.3.255
-        inet6 fe80::3959:f5b6:530b:5bb5  prefixlen 64  scopeid 0x20<link>
-        ether 08:00:27:1b:6e:39  txqueuelen 1000  (Ethernet)
-        RX packets 170  bytes 16202 (15.8 KiB)
-        RX errors 0  dropped 0  overruns 0  frame 0
-        TX packets 179  bytes 15155 (14.7 KiB)
-        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
-
-lo: flags=73<UP,LOOPBACK,RUNNING>  mtu 65536
-        inet 127.0.0.1  netmask 255.0.0.0
-        inet6 ::1  prefixlen 128  scopeid 0x10<host>
-        loop  txqueuelen 1  (Local Loopback)
-        RX packets 7433  bytes 724856 (707.8 KiB)
-        RX errors 0  dropped 0  overruns 0  frame 0
-        TX packets 7433  bytes 724856 (707.8 KiB)
-        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
-
-vethe461b48: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
-        inet6 fe80::dc4e:59ff:fe71:9e65  prefixlen 64  scopeid 0x20<link>
-        ether de:4e:59:71:9e:65  txqueuelen 0  (Ethernet)
-        RX packets 8  bytes 648 (648.0 B)
-        RX errors 0  dropped 0  overruns 0  frame 0
-        TX packets 8  bytes 648 (648.0 B)
-        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+[olly@docker0 ~]$ ip a
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN qlen 1
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+    inet6 ::1/128 scope host 
+       valid_lft forever preferred_lft forever
+2: ens3: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP qlen 1000
+    link/ether 52:54:00:d7:3d:cc brd ff:ff:ff:ff:ff:ff
+    inet 192.168.122.10/24 brd 192.168.122.255 scope global ens3
+       valid_lft forever preferred_lft forever
+    inet6 fe80::b99c:7654:5307:a3a6/64 scope link 
+       valid_lft forever preferred_lft forever
+3: docker0: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc noqueue state DOWN 
+    link/ether 02:42:ba:70:52:60 brd ff:ff:ff:ff:ff:ff
+    inet 172.17.0.1/16 scope global docker0
+       valid_lft forever preferred_lft forever
 ```
 
 I have then created a Docker Swarm using the in build Docker Swarm Mode (Swarmkit).
 
 ```
-[olly@docker0 ~]$ docker swarm init --advertise-addr enp0s3
+[olly@docker0 ~]$ docker swarm init
 
-[olly@docker1 ~]$ docker swarm join --advertise-addr enp0s3  \
-    --token SWMTKN-1-4bgrvcqunq6oye74v3cjve2jbyn1t9u7mnaek3rw2clbl5van0-14dgns2w0phm1koy5yom2tzgf \
-    192.168.10.6:2377
+[olly@docker1 ~]$ docker swarm join --token SWMTKN-1-4fplmikvt0f9u53efbfxtqngf18cl6m3wd9h4ud44bm99qxyxh-8i7lt5kwbawmwapvzqqg48drt 192.168.122.10:2377
 
 [olly@docker0 ~]$ docker node ls
 ID                           HOSTNAME       STATUS  AVAILABILITY  MANAGER STATUS
@@ -116,43 +80,46 @@ t0k5yhm8g0wft11397n4caz9j *  docker0.local  Ready   Active        Leader
 td0ifcvhzy7cexgiixiisnl3b    docker1.local  Ready   Active
 ``` 
 
-Perfect.
+Perfect, we have a cluster.
 
 ### Exploring the Namespaces
 
  Now lets create an overlay network and a service so we can actually start to poke around the various namespaces within SwarmKit.
 
 ```
-$ docker network create -d overlay --subnet 192.168.200.0/24 demonet
-$ docker service create --replicas 2 --network demonet --name demoservice alpine sleep 10000
+[olly@docker0 ~]$ docker network create -d overlay --subnet 192.168.200.0/24 demonet
+t7zfankbs8hm17bi65g0fr4zi
+[olly@docker0 ~]$ docker service create --replicas 2 --network demonet --name demoservice alpine sleep 50000
+z2p2zg47t2h7qa1g4t5wcvpke
 
 [olly@docker0 ~]$ docker service ps demoservice
-ID            NAME               IMAGE          NODE           DESIRED STATE  CURRENT STATE          ERROR                             PORTS
-zazcrztrp8no  demoservice.1      alpine:latest  docker0.local  Running        Running 8 minutes ago
-lbg6y0b0y3zh   \_ demoservice.1  alpine:latest  docker0.local  Shutdown       Failed 8 minutes ago   "starting container failed: Ad…"
-qfbik6vam8q6  demoservice.2      alpine:latest  docker1.local  Running        Running 8 minutes ago
+ID                  NAME                IMAGE               NODE                DESIRED STATE       CURRENT STATE            ERROR               PORTS
+dxug6j2lijsr        demoservice.1       alpine:latest       docker0.local       Running             Running 32 seconds ago                       
+n6ncl5yfszwc        demoservice.2       alpine:latest       docker1.local       Running             Running 32 seconds ago       
 ```
 
 As you can see we now have a container running on each of my hosts. 
 
 Checking the networks you can see I have my overlay network, and now 4 network namespaces. 
 
+For more information on network namespaces. Head to: https://blog.scottlowe.org/2013/09/04/introducing-linux-network-namespaces/
+
 ```
 [olly@docker0 ~]$ docker network ls
 NETWORK ID          NAME                DRIVER              SCOPE
-1586a330769e        bridge              bridge              local
-jv8c30bcmnza        demonet             overlay             swarm
-ae5a99b47a8e        docker_gwbridge     bridge              local
-1f54d786801e        host                host                local
-jk79gn3pi7ge        ingress             overlay             swarm
-684885c1baa0        none                null                local
+c168bc566c10        bridge              bridge              local
+t7zfankbs8hm        demonet             overlay             swarm
+90d63100439b        docker_gwbridge     bridge              local
+ec08e9c80ede        host                host                local
+wi6xp5jnpkzp        ingress             overlay             swarm
+f98650512a55        none                null                local
 
-[root@docker0 olly]# ls -l /var/run/docker/netns
+[olly@docker0 ~]$ sudo ls -l /var/run/docker/netns
 total 0
--r--r--r--. 1 root root 0 Aug 23 11:11 06e0e24ce06d
--r--r--r--. 1 root root 0 Aug 23 09:22 1-jk79gn3pi7
--r--r--r--. 1 root root 0 Aug 23 11:11 1-jv8c30bcmn
--r--r--r--. 1 root root 0 Aug 23 09:22 ingress_sbox
+-r--r--r--. 1 root root 0 Sep  5 10:31 1-t7zfankbs8
+-r--r--r--. 1 root root 0 Sep  5 10:29 1-wi6xp5jnpk
+-r--r--r--. 1 root root 0 Sep  5 10:31 f9f4ceb4012b
+-r--r--r--. 1 root root 0 Sep  5 10:29 ingress_sbox
 ```
 
 So what are these namespaces defined within /var/run/docker/netns ?
@@ -160,118 +127,103 @@ So what are these namespaces defined within /var/run/docker/netns ?
 1. The Alpine Containers Sandbox Namespace. This can be proven by running the inspect command.
 
 ```
-[olly@docker0 ~]$ docker inspect 43f05d7a2438 | grep Sandbox
-            "SandboxID": "f30f9eab7ed4e2e637806da7e006b743ac2b9bf8aac2a0ff2843eb02ef7c94a9",
-            "SandboxKey": "/var/run/docker/netns/f30f9eab7ed4",
+[olly@docker0 ~]$ docker ps
+CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS              PORTS               NAMES
+0252f5d8ee9a        alpine:latest       "sleep 50000"       4 minutes ago       Up 4 minutes                            demoservice.1.dxug6j2lijsr88d9hvugkm8bl
+
+[olly@docker0 ~]$ docker inspect 0252f5d8ee9a --format {{.NetworkSettings.SandboxKey}}
+/var/run/docker/netns/f9f4ceb4012b
 ```
 
-2. Ingress Overlay. You can see this as the name '1-jk79gn3pi7' matches the ID of the Ingress Overlay Network
+2. Ingress Overlay. You can see this as the name '1-wi6xp5jnpk' matches the ID of the Ingress Overlay Network
 
 ```
 [olly@docker0 ~]$ docker network ls --filter name=ingress
 NETWORK ID          NAME                DRIVER              SCOPE
-jk79gn3pi7ge        ingress             overlay             swarm
+wi6xp5jnpkzp        ingress             overlay             swarm
 ```
 
-3. Demonet Overlay. Following the same logic as the ingress overlay network. The Demonet network is contained within its own namespace.
+3. Demonet Overlay. Following the same logic as the ingress overlay network. The Demonet networks id is t7zfankbs8hm which maps to the namspace '1-t7zfankbs8hm'.
 
-4. Finally we have an Ingress Sandbox. TODO Work out what this does?
+```
+[olly@docker0 ~]$ docker network ls --filter name=demonet
+NETWORK ID          NAME                DRIVER              SCOPE
+t7zfankbs8hm        demonet             overlay             swarm
+```
+
+4. Finally we have an Ingress Sandbox network namespace. Ingress is an internal loadbalancer built within the docker network. See the Ingree Guide for more details. 
 
 ### How does my container talk to stuff?
 
 As part of the Alpine service we created above, we should now have an alpine container sat there sleeping on my host. I have specified that it should be connected to my "Demonet" network. Lets see what it looks like.
 
 ```
-[olly@docker0 ~]# docker ps
-CONTAINER ID        IMAGE                                                                            COMMAND             CREATED             STATUS              PORTS               NAMES
-9e79d66b5112        alpine@sha256:1072e499f3f655a032e88542330cf75b02e7bdf673278f701d7ba61629ee3ebe   "sleep 10000"       15 minutes ago      Up 14 minutes                           demoservice.1.zazcrztrp8noilfyignita3tf
+[olly@docker0 ~]$ docker ps
+CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS              PORTS               NAMES
+0252f5d8ee9a        alpine:latest       "sleep 50000"       9 minutes ago       Up 9 minutes                            demoservice.1.dxug6j2lijsr88d9hvugkm8bl
 
-
-[olly@docker0 ~]$ docker exec 9e79d66b5112 ifconfig
-eth0      Link encap:Ethernet  HWaddr 02:42:c0:a8:c8:03
-          inet addr:192.168.200.3  Bcast:0.0.0.0  Mask:255.255.255.0
-          inet6 addr: fe80::42:c0ff:fea8:c803/64 Scope:Link
-          UP BROADCAST RUNNING MULTICAST  MTU:1450  Metric:1
-          RX packets:41 errors:0 dropped:0 overruns:0 frame:0
-          TX packets:8 errors:0 dropped:0 overruns:0 carrier:0
-          collisions:0 txqueuelen:0
-          RX bytes:3254 (3.1 KiB)  TX bytes:648 (648.0 B)
-
-eth1      Link encap:Ethernet  HWaddr 02:42:ac:12:00:03
-          inet addr:172.18.0.3  Bcast:0.0.0.0  Mask:255.255.0.0
-          inet6 addr: fe80::42:acff:fe12:3/64 Scope:Link
-          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
-          RX packets:42 errors:0 dropped:0 overruns:0 frame:0
-          TX packets:8 errors:0 dropped:0 overruns:0 carrier:0
-          collisions:0 txqueuelen:0
-          RX bytes:3304 (3.2 KiB)  TX bytes:648 (648.0 B)
-
-lo        Link encap:Local Loopback
-          inet addr:127.0.0.1  Mask:255.0.0.0
-          inet6 addr: ::1/128 Scope:Host
-          UP LOOPBACK RUNNING  MTU:65536  Metric:1
-          RX packets:0 errors:0 dropped:0 overruns:0 frame:0
-          TX packets:0 errors:0 dropped:0 overruns:0 carrier:0
-          collisions:0 txqueuelen:1
-          RX bytes:0 (0.0 B)  TX bytes:0 (0.0 B)
+[olly@docker0 ~]$ docker exec 0252f5d8ee9a ip a
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN qlen 1
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+18: eth0@if19: <BROADCAST,MULTICAST,UP,LOWER_UP,M-DOWN> mtu 1450 qdisc noqueue state UP 
+    link/ether 02:42:c0:a8:c8:03 brd ff:ff:ff:ff:ff:ff
+    inet 192.168.200.3/24 scope global eth0
+       valid_lft forever preferred_lft forever
+    inet 192.168.200.2/32 scope global eth0
+       valid_lft forever preferred_lft forever
+20: eth1@if21: <BROADCAST,MULTICAST,UP,LOWER_UP,M-DOWN> mtu 1500 qdisc noqueue state UP 
+    link/ether 02:42:ac:12:00:03 brd ff:ff:ff:ff:ff:ff
+    inet 172.18.0.3/16 scope global eth1
+       valid_lft forever preferred_lft forever
 ```
 
-We can actually do the same thing within the Sandbox namespace of the container, using the nsenter command. 
+Ok some a default container running in Swarm Mode has 2 interfaces + loopback. Out of curiosity you get the same information from running the 'ip a' command within the Sandbox network namespace of the container. We can do this with the 'nsenter' command. 
+
 
 ```
-[root@docker0 olly]# docker inspect 9e79d66b5112 -f {{.NetworkSettings.SandboxKey}}
-/var/run/docker/netns/06e0e24ce06d
+[olly@docker0 ~]$ docker ps
+CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS              PORTS               NAMES
+0252f5d8ee9a        alpine:latest       "sleep 50000"       10 minutes ago      Up 10 minutes                           demoservice.1.dxug6j2lijsr88d9hvugkm8bl
 
-[root@docker0 olly]# nsenter --net=/var/run/docker/netns/06e0e24ce06d ifconfig
-eth0: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1450
-        inet 192.168.200.3  netmask 255.255.255.0  broadcast 0.0.0.0
-        inet6 fe80::42:c0ff:fea8:c803  prefixlen 64  scopeid 0x20<link>
-        ether 02:42:c0:a8:c8:03  txqueuelen 0  (Ethernet)
-        RX packets 14  bytes 1128 (1.1 KiB)
-        RX errors 0  dropped 0  overruns 0  frame 0
-        TX packets 8  bytes 648 (648.0 B)
-        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+[olly@docker0 ~]$ docker inspect 0252f5d8ee9a --format {{.NetworkSettings.SandboxKey}}
+/var/run/docker/netns/f9f4ceb4012b
 
-eth1: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
-        inet 172.18.0.3  netmask 255.255.0.0  broadcast 0.0.0.0
-        inet6 fe80::42:acff:fe12:3  prefixlen 64  scopeid 0x20<link>
-        ether 02:42:ac:12:00:03  txqueuelen 0  (Ethernet)
-        RX packets 8  bytes 648 (648.0 B)
-        RX errors 0  dropped 0  overruns 0  frame 0
-        TX packets 8  bytes 648 (648.0 B)
-        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
-
-lo: flags=73<UP,LOOPBACK,RUNNING>  mtu 65536
-        inet 127.0.0.1  netmask 255.0.0.0
-        inet6 ::1  prefixlen 128  scopeid 0x10<host>
-        loop  txqueuelen 1  (Local Loopback)
-        RX packets 0  bytes 0 (0.0 B)
-        RX errors 0  dropped 0  overruns 0  frame 0
-        TX packets 0  bytes 0 (0.0 B)
-        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+[olly@docker0 ~]$ sudo nsenter --net=/var/run/docker/netns/f9f4ceb4012b ip a
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN qlen 1
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+18: eth0@if19: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1450 qdisc noqueue state UP 
+    link/ether 02:42:c0:a8:c8:03 brd ff:ff:ff:ff:ff:ff link-netnsid 0
+    inet 192.168.200.3/24 scope global eth0
+       valid_lft forever preferred_lft forever
+    inet 192.168.200.2/32 scope global eth0
+       valid_lft forever preferred_lft forever
+20: eth1@if21: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP 
+    link/ether 02:42:ac:12:00:03 brd ff:ff:ff:ff:ff:ff link-netnsid 1
+    inet 172.18.0.3/16 scope global eth1
+       valid_lft forever preferred_lft forever
 ```
 
-From the ifconfig out put we can see that the container has 2 interfaces. Eth0 and Eth1. Looking at the IP address we can see the container has 1 leg in the Demonet Overlay network. And 1 leg connected to the Docker_GWBridge which lives in the global namespace.
+Wow ok, so we can actually see that those network interfaces, and the whole networking stack of the container lives with in that Network Namespace. 
+
+Trying to follow those interfaces we can see how our container talks out.
 
 ```
-[olly@docker0 ~]$ docker network inspect demonet -f '{{json .IPAM.Config}}' | jq '.'
-[
-  {
-    "Subnet": "192.168.200.0/24",
-    "Gateway": "192.168.200.1"
-  }
-]
+[olly@docker0 ~]$ docker network inspect demonet --format {{.IPAM.Config}}
+[{192.168.200.0/24  192.168.200.1 map[]}]
 
-[olly@docker0 ~]$ docker network inspect docker_gwbridge -f '{{json .IPAM.Config}}' | jq '.'
-[
-  {
-    "Subnet": "172.18.0.0/16",
-    "Gateway": "172.18.0.1"
-  }
-]
+[olly@docker0 ~]$ docker network inspect docker_gwbridge --format {{.IPAM.Config}}
+[{172.18.0.0/16  172.18.0.1 map[]}]
 ```
 
-I think its time to start drawing diagrams to work out how that is connected to the outside world.
+So eth0 of the container has an address 192.168.200.3, therefore is connected to our demonet overlay network. 
+
+Eth1 on the other hand, has the address 172.18.0.3, therefore is connected to the Network docker_gwbridge. This is the default bridge that lives on my host, that all containers connect to, allowing them to have external communication 
+
+Putting this on a diagram we can see how the container is connect to the outside world. 
 
 From the first diagram we can see that we have 4 namespaces, and the default docker_gwbridge, and my container in sandbox.
 
@@ -280,121 +232,175 @@ From the first diagram we can see that we have 4 namespaces, and the default doc
 Let start working out how we are communicating between the namespaces. This is done using VETH Pairs. So firstly lets see what VETH pairs are within the container's namespace.
 
 ```
-[root@docker0 ~]# nsenter --net=/var/run/docker/netns/06e0e24ce06d ip link show
+[olly@docker0 ~]$ docker ps
+CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS              PORTS               NAMES
+0252f5d8ee9a        alpine:latest       "sleep 50000"       18 minutes ago      Up 18 minutes                           demoservice.1.dxug6j2lijsr88d9hvugkm8bl
+
+[olly@docker0 ~]$ docker inspect 0252f5d8ee9a -f {{.NetworkSettings.SandboxKey}}
+/var/run/docker/netns/f9f4ceb4012b
+
+[olly@docker0 ~]$ sudo nsenter --net=/var/run/docker/netns/f9f4ceb4012b ip link show
+[sudo] password for olly: 
 1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN mode DEFAULT qlen 1
     link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
-18: eth0@if19: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1450 qdisc noqueue state UP mode DEFAULT
+18: eth0@if19: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1450 qdisc noqueue state UP mode DEFAULT 
     link/ether 02:42:c0:a8:c8:03 brd ff:ff:ff:ff:ff:ff link-netnsid 0
-20: eth1@if21: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP mode DEFAULT
+20: eth1@if21: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP mode DEFAULT 
     link/ether 02:42:ac:12:00:03 brd ff:ff:ff:ff:ff:ff link-netnsid 1
 ```
 
-Ok so: eth0 = interface 18 and is connected to interface 19. eth1 = interface 20 and is connected to interface 21.
+Docker nicely names the interfaces so you can understand where they are connected to. 
 
-So lets go and make sure that interface 19 lives inside of the demonet overlay namespace. 
+Interface 18 = eth0. Inteface 18 is connected to Interface 19.
+
+Inteface 20 = eth1. Interface 20 is connected to Interface 21.
+
+From here we want to check that Interface 19 lives in the Demonet Overlay namespace. Allowing container to container communication. 
 
 ```
-[root@docker0 ~]# nsenter --net=/var/run/docker/netns/1-jv8c30bcmn ip link show
+[olly@docker0 ~]$ docker network ls --filter name=demonet
+NETWORK ID          NAME                DRIVER              SCOPE
+t7zfankbs8hm        demonet             overlay             swarm
+
+[olly@docker0 ~]$ sudo nsenter --net=/var/run/docker/netns/1-t7zfankbs8 ip link show
 1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN mode DEFAULT qlen 1
     link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
-2: br0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1450 qdisc noqueue state UP mode DEFAULT
-    link/ether 1a:34:cf:83:2c:11 brd ff:ff:ff:ff:ff:ff
-17: vxlan1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1450 qdisc noqueue master br0 state UNKNOWN mode DEFAULT
-    link/ether f6:1c:e9:9a:60:bd brd ff:ff:ff:ff:ff:ff link-netnsid 0
-19: veth2@if18: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1450 qdisc noqueue master br0 state UP mode DEFAULT
-    link/ether 1a:34:cf:83:2c:11 brd ff:ff:ff:ff:ff:ff link-netnsid 1
+2: br0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1450 qdisc noqueue state UP mode DEFAULT 
+    link/ether 1a:30:c5:15:42:54 brd ff:ff:ff:ff:ff:ff
+17: vxlan0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1450 qdisc noqueue master br0 state UNKNOWN mode DEFAULT 
+    link/ether 1a:30:c5:15:42:54 brd ff:ff:ff:ff:ff:ff link-netnsid 0
+19: veth0@if18: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1450 qdisc noqueue master br0 state UP mode DEFAULT 
+    link/ether ca:29:3c:e5:9e:8f brd ff:ff:ff:ff:ff:ff link-netnsid 1
 ```
 
-Perfect. There is interface 19.
+Perfect we can see inteface 19 lives in the demonet overlay namespace. As well as a Network Bridge. A VXLAN interface (more on this in the next blog), and a loopback. 
 
-Now lets go and see if interface 21 is in the global namespace connected to the Docker_GWBridge. 
+For completeleness lets check that Interface 21 is living on the Docker Host itself. 
 
 ```
-[root@docker0 ~]# ip link show
-1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN mode DEFAULT qlen 1
+[olly@docker0 ~]$ ip a
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN qlen 1
     link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
-2: enp0s3: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP mode DEFAULT qlen 1000
-    link/ether 08:00:27:35:83:35 brd ff:ff:ff:ff:ff:ff
-3: enp0s8: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP mode DEFAULT qlen 1000
-    link/ether 08:00:27:b3:03:4a brd ff:ff:ff:ff:ff:ff
-4: docker0: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc noqueue state DOWN mode DEFAULT
-    link/ether 02:42:ca:14:bb:9a brd ff:ff:ff:ff:ff:ff
-5: docker_gwbridge: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP mode DEFAULT
-    link/ether 02:42:0c:99:9e:cd brd ff:ff:ff:ff:ff:ff
-11: vethb0f3583@if10: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue master docker_gwbridge state UP mode DEFAULT
-    link/ether ee:a6:c3:12:df:41 brd ff:ff:ff:ff:ff:ff link-netnsid 1
-21: veth90d0481@if20: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue master docker_gwbridge state UP mode DEFAULT
-    link/ether fe:02:c8:af:60:f5 brd ff:ff:ff:ff:ff:ff link-netnsid 4
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+    inet6 ::1/128 scope host 
+       valid_lft forever preferred_lft forever
+2: ens3: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP qlen 1000
+    link/ether 52:54:00:d7:3d:cc brd ff:ff:ff:ff:ff:ff
+    inet 192.168.122.10/24 brd 192.168.122.255 scope global ens3
+       valid_lft forever preferred_lft forever
+    inet6 fe80::b99c:7654:5307:a3a6/64 scope link 
+       valid_lft forever preferred_lft forever
+3: docker0: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc noqueue state DOWN 
+    link/ether 02:42:ba:70:52:60 brd ff:ff:ff:ff:ff:ff
+    inet 172.17.0.1/16 scope global docker0
+       valid_lft forever preferred_lft forever
+8: docker_gwbridge: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP 
+    link/ether 02:42:fa:6d:94:b5 brd ff:ff:ff:ff:ff:ff
+    inet 172.18.0.1/16 scope global docker_gwbridge
+       valid_lft forever preferred_lft forever
+    inet6 fe80::42:faff:fe6d:94b5/64 scope link 
+       valid_lft forever preferred_lft forever
+16: veth1a1ccf0@if15: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue master docker_gwbridge state UP 
+    link/ether 2e:db:f1:a9:b0:d0 brd ff:ff:ff:ff:ff:ff link-netnsid 1
+    inet6 fe80::2cdb:f1ff:fea9:b0d0/64 scope link 
+       valid_lft forever preferred_lft forever
+21: veth0c4d246@if20: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue master docker_gwbridge state UP 
+    link/ether 26:df:a4:02:5f:4c brd ff:ff:ff:ff:ff:ff link-netnsid 3
+    inet6 fe80::24df:a4ff:fe02:5f4c/64 scope link 
+       valid_lft forever preferred_lft forever
 ```
 
 Perfect there is interface 21. So we can now update our diagram accordingly. 
 
 ![alt text](../master/images/image2.png "Image 2")
 
+### Traffic routing
+
 Just for completeness here I lets see how the container knows where to send the traffic.
 
 ```
-[root@docker0 olly]# docker exec 3e53de6af276 ip route show
-default via 172.18.0.1 dev eth1
-172.18.0.0/16 dev eth1  src 172.18.0.3
-192.168.200.0/24 dev eth0  src 192.168.200.4
+[olly@docker0 ~]$ docker ps
+CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS              PORTS               NAMES
+0252f5d8ee9a        alpine:latest       "sleep 50000"       27 minutes ago      Up 27 minutes                           demoservice.1.dxug6j2lijsr88d9hvugkm8bl
+
+[olly@docker0 ~]$ docker exec 0252f5d8ee9a ip route show
+default via 172.18.0.1 dev eth1 
+172.18.0.0/16 dev eth1  src 172.18.0.3 
+192.168.200.0/24 dev eth0  src 192.168.200.3 
 ```
 
 Ok nice so there are some static routes in play. The default option is to send the traffic out of the eth1 to the internet. However if we are talking on the demonet subnet of 192.168.200.0/24 then go down eth0. 
 
-We can even monitor the veths in the sandbox namespace, to prove this is working correctly. Here I am going to open up terminal sessions.
+We can even monitor the veths in the sandbox namespace, to prove this is working correctly. Here I am going to open up a second terminal session to Docker Host 'docker0'.
 
 Terminal1:
 ```
-[root@docker0 ~]# docker exec 3e53de6af276 apk add --update tcpdump
-[root@docker0 ~]# docker exec 3e53de6af276 tcpdump -i eth0 -vv
+[olly@docker0 ~]$ docker ps
+CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS              PORTS               NAMES
+0252f5d8ee9a        alpine:latest       "sleep 50000"       28 minutes ago      Up 28 minutes                           demoservice.1.dxug6j2lijsr88d9hvugkm8bl
+
+[olly@docker0 ~]$ docker exec 0252f5d8ee9a apk add --update tcpdump
+
+[olly@docker0 ~]$ docker exec 0252f5d8ee9a tcpdump -i eth0 -vv
 ```
 
 Terminal2:
 ```
-[olly@docker0 ~]$ docker exec 3e53de6af276 ping 192.168.200.1 -c 4
+[olly@docker0 ~]$ docker ps
+CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS              PORTS               NAMES
+0252f5d8ee9a        alpine:latest       "sleep 50000"       29 minutes ago      Up 29 minutes                           demoservice.1.dxug6j2lijsr88d9hvugkm8bl
+
+[olly@docker0 ~]$ docker exec 0252f5d8ee9a ping 192.168.200.1 -c 4
 PING 192.168.200.1 (192.168.200.1): 56 data bytes
-64 bytes from 192.168.200.1: seq=0 ttl=64 time=0.139 ms
-64 bytes from 192.168.200.1: seq=1 ttl=64 time=0.144 ms
-64 bytes from 192.168.200.1: seq=2 ttl=64 time=0.110 ms
-64 bytes from 192.168.200.1: seq=3 ttl=64 time=0.110 ms
+64 bytes from 192.168.200.1: seq=0 ttl=64 time=0.085 ms
+64 bytes from 192.168.200.1: seq=1 ttl=64 time=0.301 ms
+64 bytes from 192.168.200.1: seq=2 ttl=64 time=1.079 ms
+64 bytes from 192.168.200.1: seq=3 ttl=64 time=0.297 ms
 
 --- 192.168.200.1 ping statistics ---
 4 packets transmitted, 4 packets received, 0% packet loss
-round-trip min/avg/max = 0.110/0.125/0.144 ms
+round-trip min/avg/max = 0.085/0.440/1.079 ms
 ```
+
+Now on terminal 1 you should see:
+
 
 Terminal1:
 ```
-[root@docker0 ~]# docker exec 3e53de6af276 tcpdump -i eth0 -vv
+[olly@docker0 ~]$ docker exec 0252f5d8ee9a tcpdump -i eth0 -vv
 tcpdump: listening on eth0, link-type EN10MB (Ethernet), capture size 262144 bytes
-15:50:24.396714 IP (tos 0x0, ttl 64, id 19031, offset 0, flags [DF], proto ICMP (1), length 84)
-    3e53de6af276 > 192.168.200.1: ICMP echo request, id 18176, seq 0, length 64
-15:50:24.396783 IP (tos 0x0, ttl 64, id 55889, offset 0, flags [none], proto ICMP (1), length 84)
-    192.168.200.1 > 3e53de6af276: ICMP echo reply, id 18176, seq 0, length 64
-15:50:25.399797 IP (tos 0x0, ttl 64, id 19915, offset 0, flags [DF], proto ICMP (1), length 84)
-    3e53de6af276 > 192.168.200.1: ICMP echo request, id 18176, seq 1, length 64
-15:50:25.399847 IP (tos 0x0, ttl 64, id 56855, offset 0, flags [none], proto ICMP (1), length 84)
-    192.168.200.1 > 3e53de6af276: ICMP echo reply, id 18176, seq 1, length 64
-15:50:26.404153 IP (tos 0x0, ttl 64, id 20855, offset 0, flags [DF], proto ICMP (1), length 84)
-    3e53de6af276 > 192.168.200.1: ICMP echo request, id 18176, seq 2, length 64
-15:50:26.404188 IP (tos 0x0, ttl 64, id 57649, offset 0, flags [none], proto ICMP (1), length 84)
-    192.168.200.1 > 3e53de6af276: ICMP echo reply, id 18176, seq 2, length 64
-15:50:27.409870 IP (tos 0x0, ttl 64, id 21257, offset 0, flags [DF^C
+10:01:00.800598 ARP, Ethernet (len 6), IPv4 (len 4), Request who-has 192.168.200.1 tell 0252f5d8ee9a, length 28
+10:01:00.800621 ARP, Ethernet (len 6), IPv4 (len 4), Reply 192.168.200.1 is-at 1a:30:c5:15:42:54 (oui Unknown), length 28
+10:01:00.800623 IP (tos 0x0, ttl 64, id 17253, offset 0, flags [DF], proto ICMP (1), length 84)
+    0252f5d8ee9a > 192.168.200.1: ICMP echo request, id 5888, seq 0, length 64
+10:01:00.800642 IP (tos 0x0, ttl 64, id 57, offset 0, flags [none], proto ICMP (1), length 84)
+    192.168.200.1 > 0252f5d8ee9a: ICMP echo reply, id 5888, seq 0, length 64
+10:01:01.800947 IP (tos 0x0, ttl 64, id 17379, offset 0, flags [DF], proto ICMP (1), length 84)
+    0252f5d8ee9a > 192.168.200.1: ICMP echo request, id 5888, seq 1, length 64
+10:01:01.801024 IP (tos 0x0, ttl 64, id 793, offset 0, flags [none], proto ICMP (1), length 84)
+    192.168.200.1 > 0252f5d8ee9a: ICMP echo reply, id 5888, seq 1, length 64
+10:01:02.802422 IP (tos 0x0, ttl 64, id 17764, offset 0, flags [DF], proto ICMP (1), length 84)
+    0252f5d8ee9a > 192.168.200.1: ICMP echo request, id 5888, seq 2, length 64
+10:01:02.802494 IP (tos 0x0, ttl 
 ```
 
-Ok awesome so if I am sending a request to the gateway or a container on that DemoNet overlay network, it is going to the Demonet overlay namespace. Awesome :)
+Ok awesome so if I am sending a request to the gateway or a container on that DemoNet overlay network, it is going to the Demonet overlay namespace via eth0. Awesome :)
 
 We can double check to make sure traffic is going to the global namespace when it needs to go outside. 
 
 Terminal1
 ```
-[root@docker0 ~]# docker exec 3e53de6af276 tcpdump -i eth1 -vv
+[olly@docker0 ~]$ docker ps
+CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS              PORTS               NAMES
+0252f5d8ee9a        alpine:latest       "sleep 50000"       31 minutes ago      Up 31 minutes                           demoservice.1.dxug6j2lijsr88d9hvugkm8bl
+
+[olly@docker0 ~]$ docker exec 0252f5d8ee9a tcpdump -i eth1 -vv
 ```
 
 Terminal2
 ```
-[olly@docker0 ~]$ docker exec 3e53de6af276 ping 8.8.8.8 -c 4
+[olly@docker0 ~]$ docker exec 0252f5d8ee9a ping 8.8.8.8 -c 4
 PING 8.8.8.8 (8.8.8.8): 56 data bytes
 64 bytes from 8.8.8.8: seq=0 ttl=61 time=6.976 ms
 64 bytes from 8.8.8.8: seq=1 ttl=61 time=5.929 ms
@@ -406,58 +412,45 @@ PING 8.8.8.8 (8.8.8.8): 56 data bytes
 round-trip min/avg/max = 5.287/5.990/6.976 ms
 ```
 
+And once again on Terminal 1 we should now have a few packets :)
+
 Terminal1
 ```
-[root@docker0 ~]# docker exec 3e53de6af276 tcpdump -i eth1 -vv
+[olly@docker0 ~]$ docker exec 0252f5d8ee9a tcpdump -i eth1 -vv
 tcpdump: listening on eth1, link-type EN10MB (Ethernet), capture size 262144 bytes
-15:53:17.623446 IP (tos 0x0, ttl 64, id 8514, offset 0, flags [DF], proto ICMP (1), length 84)
-    172.18.0.3 > google-public-dns-a.google.com: ICMP echo request, id 20224, seq 0, length 64
-15:53:17.629460 IP (tos 0x0, ttl 61, id 31464, offset 0, flags [DF], proto ICMP (1), length 84)
-    google-public-dns-a.google.com > 172.18.0.3: ICMP echo reply, id 20224, seq 0, length 64
-15:53:18.040380 IP (tos 0x0, ttl 64, id 47549, offset 0, flags [DF], proto UDP (17), length 66)
-    172.18.0.3.36804 > max-az-2k12-dc1.internal.maximus-it.com.53: [bad udp cksum 0x5869 -> 0x2fd9!] 52840+ PTR? 8.8.8.8.in-addr.arpa. (38)
-15:53:18.056098 IP (tos 0x0, ttl 63, id 31465, offset 0, flags [none], proto UDP (17), length 110)
-    max-az-2k12-dc1.internal.maximus-it.com.53 > 172.18.0.3.36804: [udp sum ok] 52840 q: PTR? 8.8.8.8.in-addr.arpa. 1/0/0 8.8.8.8.in-addr.arpa. PTR google-public-dns-a.google.com. (82)
-15:53:18.057096 IP (tos 0x0, ttl 64, id 47552, offset 0, flags [DF], proto UDP (17), length 69)
-    172.18.0.3.45495 > max-az-2k12-dc1.internal.maximus-it.com.53: [bad udp cksum 0x586c -> 0x3d0b!] 52103+ PTR? 3.0.18.172.in-addr.arpa. (41)
-15:53:18.086138 IP (tos 0x0, ttl 63, id 31466, offset 0, flags [none], proto UDP (17), length 69)
-    max-az-2k12-dc1.internal.maximus-it.com.53 > 172.18.0.3.45495: [udp sum ok] 52103 NXDomain q: PTR? 3.0.18.172.in-addr.arpa. 0/0/0 (41)
-15:53:18.625708 IP (tos 0x0, ttl 64, id 8617, offset 0, flags [DF], proto ICMP (1), length 84)
-    172.18.0.3 > google-public-dns-a.google.com: ICMP echo request, id 20224, seq 1, length 64
-15:53:18.631365 IP (tos 0x0, ttl 61, id 31467, offset 0, flags [DF], proto ICMP (1), length 84)
-    google-public-dns-a.google.com > 172.18.0.3: ICMP echo reply, id 20224, seq 1, length 64
-15:53:19.042464 IP (tos 0x0, ttl 64, id 48393, offset 0, flags [DF], proto UDP (17), length 69)
-    172.18.0.3.33958 > max-az-2k12-dc1.internal.maximus-it.com.53: [bad udp cksum 0x586c -> 0x3348!] 1115+ PTR? 4.0.16.172.in-addr.arpa. (41)
-15:53:19.060691 IP (tos 0x0, ttl 63, id 31468, offset 0, flags [none], proto UDP (17), length 122)
-    max-az-2k12-dc1.internal.maximus-it.com.53 > 172.18.0.3.33958: [udp sum ok] 1115* q: PTR? 4.0.16.172.in-addr.arpa. 1/0/0 4.0.16.172.in-addr.arpa. PTR max-az-2k12-dc1.internal.maximus-it.com. (94)
-15:53:19.629414 IP (tos 0x0, ttl 64, id 9188, offset 0, flags [DF], proto ICMP (1), length 84)
-    172.18.0.3 > google-public-dns-a.google.com: ICMP echo request, id 20224, seq 2, length 64
-15:53:19.634906 IP (tos 0x0, ttl 61, id 31469, offset 0, flags [DF], proto ICMP (1), length 84)
-    google-public-dns-a.google.com > 172.18.0.3: ICMP echo reply, id 20224, seq 2, length 64
-15:53:20.629957 IP (tos 0x0, ttl 64, id 9281, offset 0, flags [DF], proto ICMP (1), length 84)
-    172.18.0.3 > google-public-dns-a.google.com: ICMP echo request, id 20224, seq 3, length 64
-15:53:20.635036 IP (tos 0x0, ttl 61, id 31470, offset 0, flags [DF], proto ICMP (1), length 84)
-    google-public-dns-a.google.com > 172.18.0.3: ICMP echo reply, id 20224, seq 3, length 64
-15:53:22.629378 ARP, Ethernet (len 6), IPv4 (len 4), Request who-has 172.18.0.1 tell 172.18.0.3, length 28
+10:03:53.865755 IP (tos 0x0, ttl 64, id 62720, offset 0, flags [DF], proto ICMP (1), length 84)
+    172.18.0.3 > google-public-dns-a.google.com: ICMP echo request, id 8960, seq 0, length 64
+10:03:53.872569 IP (tos 0x0, ttl 57, id 50076, offset 0, flags [none], proto ICMP (1), length 84)
+    google-public-dns-a.google.com > 172.18.0.3: ICMP echo reply, id 8960, seq 0, length 64
+10:03:54.400640 IP (tos 0x0, ttl 64, id 47849, offset 0, flags [DF], proto UDP (17), length 66)
+    172.18.0.3.33602 > google-public-dns-a.google.com.53: [bad udp cksum 0xbc64 -> 0x3446!] 29314+ PTR? 8.8.8.8.in-addr.arpa. (38)
+10:03:54.507849 IP (tos 0x0, ttl 57, id 43925, offset 0, flags [none], proto UDP (17), length 110)
+    google-public-dns-a.google.com.53 > 172.18.0.3.33602: [udp sum ok] 29314 q: PTR? 8.8.8.8.in-addr.arpa. 1/0/0 8.8.8.8.in-addr.arpa. PTR google-public-dns-a.google.com. (82)
+10:03:54.510280 IP (tos 0x0, ttl 64, id 47942, offset 0, flags [DF], proto UDP (17), length 69)
+    172.18.0.3.38744 > google-public-dns-a.google.com.53: [bad udp cksum 0xbc67 -> 0x79bf!] 17719+ PTR? 3.0.18.172.in-addr.arpa. (41)
+10:03:54.516941 IP (tos 0x0, ttl 57, id 11062, offset 0, flags [none], proto UDP (17), length 69)
+    google-public-dns-a.google.com.53 > 172.18.0.3.38744: [udp sum ok] 17719 NXDomain q: PTR? 3.0.18.172.in-addr.arpa. 0/0/0 (41)
+10:03:54.866345 IP (tos 0x0, ttl 64, id 63489, offset 0, flags [DF], proto ICMP (1), length 84)
+    172.18.0.3 > google-public-dns-a.google.com: ICMP echo request, id 8960, seq 1, length 64
+10:03:54.871385 IP (tos 0x0, ttl 57, id 50515, offset 0, flags [none], proto ICMP (1), length 84)
+    google-public-dns-a.google.com > 172.18.0.3: ICMP echo reply, id 8960, seq 1, length 64
+10:03:55.866955 IP (tos 0x0, ttl 64, id 63761, offset 0, flags [DF], proto ICMP (1), length 84)
+    172.18.0.3 > google-public-dns-a.google.com: ICMP echo request, id 8960, seq 2, length 64
+10:03:55.873911 IP (tos 0x0, ttl 57, id 51220, offset 0, flags [none], proto ICMP (1), length 84)
+    google-public-dns-a.google.com > 172.18.0.3: ICMP echo reply, id 8960, seq 2, length 64
+10:03:56.867490 IP (tos 0x0, ttl 64, id 64265, offset 0, flags [DF], proto ICMP (1), length 84)
+    172.18.0.3 > google-public-dns-a.google.com: ICMP echo request, id 8960, seq 3, length 64
+10:03:56.874199 IP (tos 0x0, ttl 57, id 51699, offset 0, flags [none], proto ICMP (1), length 84)
+    google-public-dns-a.google.com > 172.18.0.3: ICMP echo reply, id 8960, seq 3, length 64
+10:03:58.877301 ARP, Ethernet (len 6), IPv4 (len 4), Request who-has 172.18.0.1 tell 172.18.0.3, length 28
+10:03:58.877333 ARP, Ethernet (len 6), IPv4 (len 4), Request who-has 172.18.0.3 tell 172.18.0.1, length 28
+10:03:58.877391 ARP, Ethernet (len 6), IPv4 (len 4), Reply 172.18.0.3 is-at 02:42:ac:12:00:03 (oui Unknown), length 28
+10:03:58.877376 ARP, Ethernet (len 6), IPv4 (len 4), Reply 172.18.0.1 is-at 02:42:fa:6d:94:b5 (oui Unknown), length 28
+10:03:59.407728 IP (tos 0x0, ttl 64, id 49516, offset 0, flags [DF], proto UDP (17), length 69)
+    172.18.0.3.36703 > google-public-dns-a.google.com.53: [bad udp cksum 0xbc67 -> 0x3b40!] 35761+ PTR? 1.0.18.172.in-addr.arpa. (41)
+10:03:59.412610 IP 
 ```
 
 Awesome. Happy days. This shows the isolation for docker container overlay networking. If required you can actually run containers which don't have a leg in the global namespace at all. Completely isolated. 
 
-TODO - Show how the ingress network is connected. And however Ingress Overlay networking works for multiple hosts.
-
-```
-[root@docker0 ~]# nsenter --net=/var/run/docker/netns/1-jv8c30bcmn ip -d link show
-1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN mode DEFAULT qlen 1
-    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00 promiscuity 0 addrgenmode eui64
-2: br0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1450 qdisc noqueue state UP mode DEFAULT
-    link/ether 1a:34:cf:83:2c:11 brd ff:ff:ff:ff:ff:ff promiscuity 0
-    bridge forward_delay 1500 hello_time 200 max_age 2000 addrgenmode eui64
-17: vxlan1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1450 qdisc noqueue master br0 state UNKNOWN mode DEFAULT
-    link/ether f6:1c:e9:9a:60:bd brd ff:ff:ff:ff:ff:ff link-netnsid 0 promiscuity 1
-    vxlan id 4097 srcport 0 0 dstport 4789 proxy l2miss l3miss ageing 300
-    bridge_slave addrgenmode eui64
-19: veth2@if18: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1450 qdisc noqueue master br0 state UP mode DEFAULT
-    link/ether 1a:34:cf:83:2c:11 brd ff:ff:ff:ff:ff:ff link-netnsid 1 promiscuity 1
-    veth
-    bridge_slave addrgenmode eui64
-```
+The 2nd blog post here will show how the ingress networking, routing and loadbalancing works. 
