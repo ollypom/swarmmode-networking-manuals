@@ -64,7 +64,7 @@ This is exactly the same the alpine container, in terms of connections.
 
 Therfore an updated diagram looks like this.
 
-# IMAGE 3 
+![alt text](../master/images/image3.png "Image 3")
 
 Lets see what intefaces are in use when we try and use out alpine container and ping the second alpine container. 
 
@@ -154,7 +154,7 @@ We can see here that using the requests are going from the container, down the V
 
 To prove that this is going on we can see that in the terminal 3 output, that traffic is going to the IP of the second host 192.168.122.11. And is using the default VXLAN interface 4789. 
 
-# Image 4
+![alt text](../master/images/image4.png "Image 4")
 
 More details on VXLAN can be found here:
 
