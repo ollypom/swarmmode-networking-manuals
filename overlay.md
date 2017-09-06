@@ -162,7 +162,7 @@ http://blog.nigelpoulton.com/demystifying-docker-overlay-networking/
 
 https://vincent.bernat.im/en/blog/2017-vxlan-linux
 
-# ROUTING MESH!
+### Routing Mesh
 
 Ok so we now have an ingress container, attached to an ingress network. This powers the Docker Swarm Mode inbuilt loadbalancer. The Routing Mesh. 
 
