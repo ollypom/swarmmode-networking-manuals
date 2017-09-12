@@ -1,4 +1,4 @@
-# A Deep Dive look at Docker SwarmMode (SwarmKit,Libnetwork,CNM) networking
+# A Deep Dive look at Docker Swarm Mode Networking (SwarmKit, Libnetwork, CNM)
 
 A list of deep dives guides i'm writing on SwarmMode networking as I work with different clusters in different customer environments.
 
