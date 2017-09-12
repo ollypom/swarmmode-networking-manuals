@@ -67,7 +67,7 @@ ens3 is my primary interface and it is on the 192.168.122.0/24 subnet.
        valid_lft forever preferred_lft forever
 ```
 
-I have then created a Docker Swarm using the in build Docker Swarm Mode (Swarmkit).
+I have then created a cluster using the embedded Docker Swarm Mode (Swarmkit).
 
 ```
 [olly@docker0 ~]$ docker swarm init
