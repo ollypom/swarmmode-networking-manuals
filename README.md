@@ -1,4 +1,4 @@
-# A Guide to look at Container Namespaces
+# A Deep Dive look at Networking Docker Swarm Mode
 
 When looking online I felt there was good update to information on Docker Swarm Mode / SwarmKit Networking at a really really low level. Sooo here we go:
 
