@@ -62,75 +62,95 @@ olly@xps ~/D/d/m/swarm-mode-manuals> curl -k https://10.1.0.10                  
 </html>
 ```
 
-Hmm i'm not sure why this is available on both Interfaces. 
+Ok so published ports is not affected by the split in interfaces. 
 
-Lets see whats going on here.
+Instead the 2 things that are is the Control Plan of Swarm and the Data Plan of Swarm. 
 
+The differences between these layers:
+
+![alt text](../master/images/networkplanes.png "Network Planes Slide")
+
+Therefore within in my environment we can summarise this as:
+
+ens3 10.0.0.0/24 will carry all the "Data Plane" traffic. All Container to Container communication accross overlay networks will go accross this network. 
+
+ens9 10.1.0.0/24 will carry all the "Control Plane" traffic. There all swarm Gossip and Service Discovery will go accross this network. 
+
+Lets prove this my inspect traffic on an interface. 
+
+Looking at the Docker EE UCP Requirements https://docs.docker.com/datacenter/ucp/2.2/guides/admin/install/system-requirements/#ports-used we can see the following ports are required for these planes:
+
+Control Plane:
+ - 2366 Classic Swarm
+ - 2377 Swarm Mode - Cluster Mgmt and Raft
+ - 7946 Swarm Mode - Gossip 
+
+Data Plane:
+ - 4789 Overlay Networking Between Nodes
+
+### Control Plane
+
+Classic Swarm 2376:
+```
+olly@swarm1:~$ sudo timeout 2 tcpdump -vvv -i ens9 port 2376
+tcpdump: listening on ens9, link-type EN10MB (Ethernet), capture size 262144 bytes
+11:49:33.946165 IP (tos 0x0, ttl 63, id 36498, offset 0, flags [DF], proto TCP (6), length 746)
+    10.1.0.10.2376 > 10.1.0.12.51358: Flags [P.], cksum 0x16f4 (incorrect -> 0x628f), seq 84266628:84267322, ack 2514489048, win 283, options [nop,nop,TS val 1856967 ecr 1855407], length 694
+<trimmed>
+```
+
+Swarm Mode 2377 (RAFT):
+```
+olly@swarm1:~$ sudo timeout 2 tcpdump -vvv -i ens9 port 2377
+tcpdump: listening on ens9, link-type EN10MB (Ethernet), capture size 262144 bytes
+11:54:30.213088 IP (tos 0x0, ttl 64, id 21257, offset 0, flags [DF], proto TCP (6), length 170)
+    10.1.0.10.39644 > 10.1.0.11.2377: Flags [P.], cksum 0x14b3 (incorrect -> 0x9eb5), seq 2476465720:2476465838, ack 778518783, win 241, options [nop,nop,TS val 1931033 ecr 1930158], length 118
+<trimmed>
+```
+
+Swarm Mode 7946 (Gossip):
+```
+olly@swarm1:~$ sudo timeout 2 tcpdump -vvv -i ens9 port 7946
+tcpdump: listening on ens9, link-type EN10MB (Ethernet), capture size 262144 bytes
+11:55:21.006691 IP (tos 0x0, ttl 64, id 43985, offset 0, flags [DF], proto UDP (17), length 99)
+    10.1.0.10.7946 > 10.1.0.13.7946: [bad udp cksum 0x1479 -> 0x05b3!] UDP, length 71
+11:55:21.008214 IP (tos 0x0, ttl 64, id 18668, offset 0, flags [DF], proto UDP (17), length 77)
+    10.1.0.13.7946 > 10.1.0.10.7946: [bad udp cksum 0x1463 -> 0x6c13!] UDP, length 49
+```
+
+### Data Plane
+
+Here we will swap interfaces, instead of monitoring traffic on ens9, we will now monitor traffic on ens3.
+
+VXLAN 4789 (Overlay Networking):
 ```
 olly@swarm1:~$ docker network create -d overlay --subnet 192.168.100.0/24 testernet
 
-olly@swarm1:~$ docker service create --replicas 2 --network testernet --name testernginx nginx 
+olly@swarm1:~$ docker service create --replicas 2 --network testernet --name testernginx --publish 80:80 nginx 
 
-olly@swarm1:~$ docker service update --publish-add 80:80 testernginx
+olly@swarm1:~$ docker service create --replicas 1 --network testernet --name testeralpine alpine sleep 5000
 ```
 
-Ok lets see if our nxginx service is only accessible on the data path port
-
+Terminal1:
 ```
-olly@xps ~/D/d/m/swarm-mode-manuals> curl http://10.0.0.10                                                                                                                                             130 master?
-<!DOCTYPE html>
-<html>
-<head>
-<title>Welcome to nginx!</title>
-<style>
-    body {
-        width: 35em;
-        margin: 0 auto;
-        font-family: Tahoma, Verdana, Arial, sans-serif;
-    }
-</style>
-</head>
-<body>
-<h1>Welcome to nginx!</h1>
-<p>If you see this page, the nginx web server is successfully installed and
-working. Further configuration is required.</p>
-
-<p>For online documentation and support please refer to
-<a href="http://nginx.org/">nginx.org</a>.<br/>
-Commercial support is available at
-<a href="http://nginx.com/">nginx.com</a>.</p>
-
-<p><em>Thank you for using nginx.</em></p>
-</body>
-</html>
-olly@xps ~/D/d/m/swarm-mode-manuals> curl http://10.1.0.10                                                                                                                                                 master?
-<!DOCTYPE html>
-<html>
-<head>
-<title>Welcome to nginx!</title>
-<style>
-    body {
-        width: 35em;
-        margin: 0 auto;
-        font-family: Tahoma, Verdana, Arial, sans-serif;
-    }
-</style>
-</head>
-<body>
-<h1>Welcome to nginx!</h1>
-<p>If you see this page, the nginx web server is successfully installed and
-working. Further configuration is required.</p>
-
-<p>For online documentation and support please refer to
-<a href="http://nginx.org/">nginx.org</a>.<br/>
-Commercial support is available at
-<a href="http://nginx.com/">nginx.com</a>.</p>
-
-<p><em>Thank you for using nginx.</em></p>
-</body>
-</html>
+olly@swarm1:~$ sudo timeout 2 tcpdump -vvv -i ens9 port 4789
 ```
 
-Ballls its not!
+Terminal2:
+```
+olly@swarm1:~$ docker exec <container-id> apk --update add curl
+olly@swarm1:~$ docker exec <container-id> curl http://testernginx.testernet
+```
+
+Termina1:
+```
+olly@swarm1:~$ sudo timeout 2 tcpdump -vvv -i ens3 port 4789
+tcpdump: listening on ens9, link-type EN10MB (Ethernet), capture size 262144 bytes
+11:55:21.006691 IP (tos 0x0, ttl 64, id 43985, offset 0, flags [DF], proto UDP (17), length 99)
+    10.1.0.10.7946 > 10.1.0.13.7946: [bad udp cksum 0x1479 -> 0x05b3!] UDP, length 71
+11:55:21.008214 IP (tos 0x0, ttl 64, id 18668, offset 0, flags [DF], proto UDP (17), length 77)
+    10.1.0.13.7946 > 10.1.0.10.7946: [bad udp cksum 0x1463 -> 0x6c13!] UDP, length 49
+```
 
 
+Awesome we can now see that we have seperated traffic
