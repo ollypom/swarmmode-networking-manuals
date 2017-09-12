@@ -9,3 +9,5 @@ When looking online I felt there was good update to information on Docker Swarm 
 [3) SwarmMode DNS Service](../master/swarmmode_dns.md)
 
 [4) SwarmMode Service Discovery and Internal Loadbalancing](../master/swarmmode_sd.md)
+
+[5) SwarmMode Network Planes in 1706](../master/networkplanes.md)
