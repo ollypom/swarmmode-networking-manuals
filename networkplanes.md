@@ -133,7 +133,7 @@ olly@swarm1:~$ docker service create --replicas 1 --network testernet --name tes
 
 Terminal1:
 ```
-olly@swarm1:~$ sudo timeout 2 tcpdump -vvv -i ens9 port 4789
+olly@swarm1:~$ sudo timeout 2 tcpdump -vvv -i ens3 port 4789
 ```
 
 Terminal2:
